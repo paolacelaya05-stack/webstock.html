@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebStock-502 | Inventarios</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f1f5f9; margin: 0; padding: 15px; color: #1e293b; }
+        .box { max-width: 760px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        h2 { color: #0f172a; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+        label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 3px; color: #475569; }
+        input { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 13px; }
+        button { padding: 8px 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #fff; font-size: 12px; }
+        .btn-save { background: #0284c7; width: 100%; font-size: 14px; padding: 10px; }
+        .btn-edit { background: #f59e0b; color: #000; }
+        .btn-del { background: #dc2626; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; gap: 10px; flex-wrap: wrap; }
+        .toolbar input { max-width: 280px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+        th { background: #0f172a; color: #fff; }
+        .alerta { background: #fef2f2; color: #991b1b; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h2>📦 WebStock-502: Control de Inventario Comercial</h2>
+    <input type="hidden" id="editIndex" value="-1">
+    <div class="grid">
+        <div><label>Código SKU:</label><input type="text" id="sku" placeholder="Ej. WS-01"></div>
+        <div><label>Producto:</label><input type="text" id="nombre" placeholder="Ej. Mouse Óptico"></div>
+        <div><label>Precio ($):</label><input type="number" id="precio" min="0.5" step="0.5" placeholder="0.00"></div>
+        <div><label>Existencia:</label><input type="number" id="stock" min="0" placeholder="0"></div>
+    </div>
+    <button class="btn-save" id="btnGuardar" onclick="guardarProducto()">+ Registrar Producto</button>
+
+    <div class="toolbar">
+        <input type="text" id="buscador" onkeyup="renderizar()" placeholder="🔍 Filtrar por SKU o nombre...">
+        <strong>Valor Total Almacén: $<span id="valorTotal">0.00</span></strong>
+    </div>
+
+    <table>
+        <thead>
+            <tr><th>SKU</th><th>Producto</th><th>Precio</th><th>Stock</th><th>Subtotal</th><th>Acciones</th></tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+    </table>
+</div>
+
+<script>
+    function getDatos() { return JSON.parse(localStorage.getItem("webstock_502")) || []; }
+    function setDatos(d) { localStorage.setItem("webstock_502", JSON.stringify(d)); }
+
+    function guardarProducto() {
+        const sku = document.getElementById("sku").value.trim().toUpperCase();
+        const nombre = document.getElementById("nombre").value.trim();
+        const precio = parseFloat(document.getElementById("precio").value);
+        const stock = parseInt(document.getElementById("stock").value);
+        const idx = parseInt(document.getElementById("editIndex").value);
+
+        if (!sku || !nombre || isNaN(precio) || isNaN(stock) || precio <= 0 || stock < 0) {
+            alert("Complete todos los datos correctamente.");
+            return;
+        }
+
+        let lista = getDatos();
+        if (idx === -1) {
+            if (lista.some(p => p.sku === sku)) { alert("Ese SKU ya existe."); return; }
+            lista.push({ sku, nombre, precio, stock });
+        } else {
+            lista[idx] = { sku, nombre, precio, stock };
+            document.getElementById("editIndex").value = "-1";
+            document.getElementById("btnGuardar").innerText = "+ Registrar Producto";
+        }
+
+        setDatos(lista);
+        limpiarForm();
+        renderizar();
+    }
+
+    function editarProducto(index) {
+        const p = getDatos()[index];
+        document.getElementById("sku").value = p.sku;
+        document.getElementById("nombre").value = p.nombre;
+        document.getElementById("precio").value = p.precio;
+        document.getElementById("stock").value = p.stock;
+        document.getElementById("editIndex").value = index;
+        document.getElementById("btnGuardar").innerText = "💾 Actualizar Cambios";
+    }
+
+    function eliminarProducto(index) {
+        if (confirm("¿Eliminar registro del inventario?")) {
+            let lista = getDatos();
+            lista.splice(index, 1);
+            setDatos(lista);
+            renderizar();
+        }
+    }
+
+    function limpiarForm() {
+        document.getElementById("sku").value = "";
+        document.getElementById("nombre").value = "";
+        document.getElementById("precio").value = "";
+        document.getElementById("stock").value = "";
+    }
+
+    function renderizar() {
+        const filtro = document.getElementById("buscador").value.toLowerCase();
+        const lista = getDatos();
+        const tbody = document.getElementById("tablaBody");
+        tbody.innerHTML = "";
+        let totalGeneral = 0;
+
+        lista.forEach((p, i) => {
+            totalGeneral += p.precio * p.stock;
+            if (p.sku.toLowerCase().includes(filtro) || p.nombre.toLowerCase().includes(filtro)) {
+                const sub = (p.precio * p.stock).toFixed(2);
+                tbody.innerHTML += `
+                    <tr class="${p.stock <= 3 ? 'alerta' : ''}">
+                        <td><strong>${p.sku}</strong></td>
+                        <td>${p.nombre}</td>
+                        <td>$${p.precio.toFixed(2)}</td>
+                        <td>${p.stock} u.</td>
+                        <td>$${sub}</td>
+                        <td>
+                            <button class="btn-edit" onclick="editarProducto(${i})">Editar</button>
+                            <button class="btn-del" onclick="eliminarProducto(${i})">X</button>
+                        </td>
+                    </tr>`;
+            }
+        });
+        document.getElementById("valorTotal").innerText = totalGeneral.toFixed(2);
+    }
+    renderizar();
+</script>
+</body>
+</html>
